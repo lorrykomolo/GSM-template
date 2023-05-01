@@ -1,0 +1,38 @@
+#include <SoftwareSerial.h>  // SoftwareSerial library for communication with SIM868 module
+#include <DHT.h>             // DHT library for interfacing with DHT11 sensor
+
+#define SIM868_RX 8          // SIM868 module RX pin
+#define SIM868_TX 9          // SIM868 module TX pin
+#define DHT11_PIN 2          // DHT11 sensor data pin
+
+SoftwareSerial SIM868(SIM868_RX, SIM868_TX);  // Define SoftwareSerial object for SIM868 module
+DHT dht(DHT11_PIN, DHT11);                    // Define DHT object for DHT11 sensor
+
+void setup() {
+  Serial.begin(9600);            // Start serial communication for debugging
+  SIM868.begin(9600);            // Start software serial communication with SIM868 module
+  dht.begin();                   // Start communication with DHT11 sensor
+  SIM868.println("AT+CLTS=1");   // Enable automatic time synchronization with cellular network
+}
+
+void loop() {
+  delay(2000);                   // Wait 2 seconds between sensor readings
+  float temperature = dht.readTemperature();  // Read temperature from DHT11 sensor
+  float humidity = dht.readHumidity();        // Read humidity from DHT11 sensor
+
+  // Get current time from SIM868 RTC and format as timestamp
+  SIM868.println("AT+CCLK?");
+  while (!SIM868.available());   // Wait for response from SIM868 module
+  String response = SIM868.readString();
+  int start = response.indexOf("\"")+1;
+  int end = response.lastIndexOf("\"");
+  String timestamp = response.substring(start,end);
+
+  // Send sensor data and timestamp to serial port
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.print(" °C | Humidity: ");
+  Serial.print(humidity);
+  Serial.print(" % | Timestamp: ");
+  Serial.println(timestamp);
+}
