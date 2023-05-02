@@ -1,0 +1,59 @@
+#include <SoftwareSerial.h>
+#include <Wire.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+SoftwareSerial sim868(10, 11); // RX, TX pins for SIM868 module
+
+// initialize LED pin
+const int LED_PIN = 13;
+
+void setup() {
+  Serial.begin(9600);
+  sim868.begin(9600); // SIM868 module baud rate
+  
+  // register the callback URL with the Daraja API
+  String url = "https://sandbox.safaricom.co.ke/mpesa/c2b/v1/registerurl";
+  String callbackURL = "https://example.com/c2b_callback"; // replace with your own callback URL
+  String confirmationURL = "https://example.com/c2b_confirm"; // replace with your own confirmation URL
+  String validationURL = "https://example.com/c2b_validate"; // replace with your own validation URL
+  
+  String requestBody = "{\"ShortCode\":\"123456\",\"ResponseType\":\"Complete\",\"ConfirmationURL\":\"" + confirmationURL + "\",\"ValidationURL\":\"" + validationURL + "\",\"CommandID\":\"CustomerPayBillOnline\",\"Amount\":\"\",\"IdentifierType\":\"4\",\"ResultURL\":\"" + callbackURL + "\",\"BillRefNumber\":\"\"}";
+  
+  HTTPClient http; // create an HTTP client object
+  http.begin(url); // specify the URL to send the HTTP request to
+  http.addHeader("Authorization", "Bearer <your API access token>"); // replace <your API access token> with your actual API access token
+  http.addHeader("Content-Type", "application/json"); // specify the content type of the request
+  
+  int httpCode = http.POST(requestBody); // send the HTTP POST request with the callback URL
+  
+  if (httpCode > 0) {
+    String response = http.getString(); // get the response from the server
+    Serial.println(response); // print the response to the serial monitor
+  }
+  
+  http.end(); // close the HTTP connection
+}
+
+void loop() {
+  // wait for incoming callback messages from the Daraja API
+  while (sim868.available() > 0) {
+    String input = sim868.readStringUntil('\n');
+    
+    // parse the callback message
+    // example message: {"TransactionType":"Pay Bill","TransID":"NCK1H2M7TX","TransTime":"20220322152845","TransAmount":"10.00","BusinessShortCode":"123456","BillRefNumber":"TestPay","InvoiceNumber":"","OrgAccountBalance":"","ThirdPartyTransID":"","MSISDN":"254723000000","FirstName":"John","MiddleName":"Doe","LastName":"Smith"}
+    DynamicJsonDocument doc(1024);
+    deserializeJson(doc, input);
+    
+    // extract the relevant information from the callback message
+    String transactionType = doc["TransactionType"];
+    String businessShortCode = doc["BusinessShortCode"];
+    String amount = doc["TransAmount"];
+    String accountNumber = doc["MSISDN"];
+    
+    // control the Arduino based on the information received in the callback message
+    if (transactionType == "Pay Bill" && businessShortCode == "123456" && accountNumber == "254723000000" && amount == "10.00") {
+      digitalWrite(LED_PIN, HIGH); // light up the LED to indicate a successful payment
+    }
+  }
+}
